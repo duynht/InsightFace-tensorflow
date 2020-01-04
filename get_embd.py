@@ -112,7 +112,7 @@ if __name__ == '__main__':
             embds_arr = embds_arr/np.linalg.norm(embds_arr, axis=1, keepdims=True)
             print('done!')
             print('saving...')
-            embds_dict = dict(*zip(fns, list(embds_arr)))
+            embds_dict = dict(zip(fns, list(embds_arr)))
             pickle.dump(embds_dict, open(args.save_path, 'wb'))
             print('done!')
 
