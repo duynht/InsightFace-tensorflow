@@ -99,8 +99,14 @@ if __name__ == '__main__':
         with tf.Session(config=tf_config) as sess:
             tf.global_variables_initializer().run()
             print('loading...')
-            saver = tf.train.Saver(var_list=tf.trainable_variables())
-            saver.restore(sess, args.model_path)
+            var_list = tf.trainable_variables()
+            g_list = tf.global_variables()
+            bn_moving_vars = [g for g in g_list if 'moving_mean' in g.name]
+            bn_moving_vars += [g for g in g_list if 'moving_variance' in g.name]
+            # print(tf.trainable_variables(scope='embd_extractor/resnet_v2_50/block1/unit_2/block_v2/conv1/BatchNorm'))
+            var_list += bn_moving_vars
+            saver = tf.train.Saver(var_list=var_list)
+            saver.restore(self.sess, args.model_path)
             print('done!')
 
             batch_size = config['batch_size']
