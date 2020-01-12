@@ -106,7 +106,7 @@ if __name__ == '__main__':
             # print(tf.trainable_variables(scope='embd_extractor/resnet_v2_50/block1/unit_2/block_v2/conv1/BatchNorm'))
             var_list += bn_moving_vars
             saver = tf.train.Saver(var_list=var_list)
-            saver.restore(self.sess, args.model_path)
+            saver.restore(sess, args.model_path)
             print('done!')
 
             batch_size = config['batch_size']
