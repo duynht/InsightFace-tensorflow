@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from scipy import misc
 
-from model import get_embd
+# from model import get_embd
 from eval.utils import calculate_roc, calculate_tar
 
 import matplotlib.pyplot as plt
@@ -22,6 +22,7 @@ from scipy.spatial import distance
 from keras.models import load_model
 import pandas as pd
 from tqdm import tqdm
+import sys
 
 
 def get_args():
@@ -52,6 +53,8 @@ def load_image(path, image_size):
     images = []
     images_f = []
     for path in paths:
+        path = path
+        # print(path)
         img = misc.imread(path)
         img = misc.imresize(img, [image_size, image_size])
         # img = img[s:s+image_size, s:s+image_size, :]
@@ -62,7 +65,11 @@ def load_image(path, image_size):
         images_f.append(img_f)
     fns = [os.path.basename(p) for p in paths]
     print('done!')
-    return (np.array(images), np.array(images_f), fns)
+    # print('size of images is ', sys.getsizeof(images))
+    ret = np.array(images)
+    ret_f = np.array(images_f)
+    # print('size of np array', sys.getsizeof(ret))
+    return (ret, ret_f, fns)
 
 def prewhiten(x):
     if x.ndim == 4:
@@ -125,17 +132,20 @@ def run_embds(sess, images, batch_size, image_size, train_mode, embds_ph, image_
     for i in range(batch_num):
         # get batch of images
         image_batch = images[i*batch_size: (i+1)*batch_size]
+        margin = 10
         # cur_embd = sess.run(embds_ph, feed_dict={
         #                     image_ph: image_batch, train_ph_dropout: train, train_ph_bn: train})
-        aligned_images = prewhiten(load_and_align_images(filepaths[start:start+batch_size], margin))
-        cur_embd = model.predict_on_batch(aligned_images)
+        aligned_images = prewhiten(image_batch)
+        cur_embd = embds_ph.predict_on_batch(aligned_images)
         embds += list(cur_embd)
         print('%d/%d' % (i, batch_num), end='\r')
     if left > 0:
         image_batch = np.zeros([batch_size, image_size, image_size, 3])
         image_batch[:left, :, :, :] = images[-left:]
-        cur_embd = sess.run(embds_ph, feed_dict={
-                            image_ph: image_batch, train_ph_dropout: train, train_ph_bn: train})
+        # cur_embd = sess.run(embds_ph, feed_dict={
+        #                     image_ph: image_batch, train_ph_dropout: train, train_ph_bn: train})
+        aligned_images = prewhiten(image_batch)
+        cur_embd = embds_ph.predict_on_batch(aligned_images)
         embds += list(cur_embd)[:left]
     print()
     print('done!')
@@ -157,33 +167,24 @@ if __name__ == '__main__':
         print('done!')
         tf_config = tf.ConfigProto(allow_soft_placement=True)
         tf_config.gpu_options.allow_growth = True
-        with tf.Session(config=tf_config) as sess:
-            tf.global_variables_initializer().run()
-            print('loading...')
-            var_list = tf.trainable_variables()
-            g_list = tf.global_variables()
-            bn_moving_vars = [g for g in g_list if 'moving_mean' in g.name]
-            bn_moving_vars += [g for g in g_list if 'moving_variance' in g.name]
-            # print(tf.trainable_variables(scope='embd_extractor/resnet_v2_50/block1/unit_2/block_v2/conv1/BatchNorm'))
-            var_list += bn_moving_vars
-            saver = tf.train.Saver(var_list=var_list)
-            saver.restore(sess, args.model_path)
-            print('done!')
+        print('loading...')
+        print('done!')
 
-            batch_size = config['batch_size']
-            imgs, imgs_f, fns = load_image(
-                args.read_path, config['image_size'])
-            print('forward running...')
-            embds_arr = run_embds(
-                sess, imgs, batch_size, config['image_size'], args.train_mode, embds, images, train_phase_dropout, train_phase_bn)
-            embds_f_arr = run_embds(
-                sess, imgs_f, batch_size, config['image_size'], args.train_mode, embds, images, train_phase_dropout, train_phase_bn)
-            embds_arr = embds_arr/np.linalg.norm(embds_arr, axis=1, keepdims=True) + \
-                embds_f_arr/np.linalg.norm(embds_f_arr, axis=1, keepdims=True)
-            embds_arr = embds_arr / \
-                np.linalg.norm(embds_arr, axis=1, keepdims=True)
-            print('done!')
-            print('saving...')
-            embds_dict = dict(zip(fns, list(embds_arr)))
-            pickle.dump(embds_dict, open(args.save_path, 'wb'))
-            print('done!')
+        batch_size = config['batch_size']
+        imgs, imgs_f, fns = load_image(
+            args.read_path, config['image_size'])
+        print('forward running...')
+        embds_arr = run_embds(
+            None, imgs, batch_size, config['image_size'], args.train_mode, embds, images, train_phase_dropout, train_phase_bn)
+        embds_f_arr = run_embds(
+            None, imgs_f, batch_size, config['image_size'], args.train_mode, embds, images, train_phase_dropout, train_phase_bn)
+        embds_arr = embds_arr/np.linalg.norm(embds_arr, axis=1, keepdims=True) + \
+            embds_f_arr/np.linalg.norm(embds_f_arr, axis=1, keepdims=True)
+        embds_arr = embds_arr / \
+            np.linalg.norm(embds_arr, axis=1, keepdims=True)
+        print('done!')
+        print('saving...')
+        embds_dict = dict(zip(fns, list(embds_arr)))
+        # embds_dict = list(embds_arr)
+        pickle.dump(embds_dict, open(args.save_path, 'wb'))
+        print('done!')
